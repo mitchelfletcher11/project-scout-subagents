@@ -117,7 +117,18 @@ LIBRARIES_KEY=$(cat ~/.claude/libraries-io-key 2>/dev/null)
 SO_KEY=$(cat ~/.claude/stackoverflow-key 2>/dev/null)
 ```
 
-If a key file is missing, fall back gracefully for that source — do not surface the error to the user unless all keys are absent.
+These three keys are **optional** — the skill works without them, just with stricter rate limits
+and a couple of data sources skipped. Each source falls back gracefully when its key is absent.
+
+**Surface the option once (zero-state rule — never silently no-op).** On a run where one or more
+key files are missing, tell the user *once* that they exist and are optional, with where to get
+each, then continue without blocking:
+- `~/.claude/github-token` — higher GitHub API limits + trending-repo data. Create at <https://github.com/settings/tokens> (no scopes needed for public read; `public_repo` is plenty).
+- `~/.claude/libraries-io-key` — package health/version data across ecosystems. Free key at <https://libraries.io/account>.
+- `~/.claude/stackoverflow-key` — higher Stack Exchange API quota. Free key at <https://stackapps.com/apps/oauth/register>.
+
+If the user wants any of them, write the pasted value to the named file with `chmod 600`. If they
+decline (or don't respond), proceed — do not ask again on subsequent runs within the session.
 
 Also pre-scan the locally installed skills directory and extract each skill's name and description. This runs in the orchestrator so Agent A does not need to read 30+ SKILL.md files inside the subagent:
 
@@ -808,6 +819,15 @@ Based on all gathered findings — GitHub repo languages and stars, community pl
 - Note any known breakage or compatibility issues for this approach given the user's stated constraints
 
 Then state a clear recommendation: which approach to use and why, grounded in specific findings. This becomes the "Stack" passed to Phase 5. Do not carry forward any tech direction assumed before searching — the recommendation must emerge from Phase 3–4 findings only.
+
+### Reusable internal method skills
+
+If the project's shape matches a method already captured as one of the user's own skills, recommend **reusing that skill** rather than building from scratch — name it in the Design Decisions section. These are design-time architecture choices, so surface them here, before recommending a generic library:
+- **`data-pipeline-workflow`** — when the project itself IS a **multi-source collect→classify→visualise pipeline** (a demand/landscape map, a competitor or review aggregator, any "ingest from N sources and organise it" system). The **orchestrator**: it fires the method skills in order and scaffolds the **versioned, auto-reconciling** pipeline, so adding a source needs no per-source filter and a prompt change re-reconciles every source uniformly. Recommend this **first** for pipeline-shaped projects; the two below are its sub-components (or standalone when only one stage is needed).
+- **`data-scrape-to-saturation`** — when the project collects from any paginated / capped / multi-segment listing site or API and wants the *complete* dataset on a schedule (enumerate-to-saturation + axis-segmentation to beat per-feed caps + incremental warm-runs, with the public-data/ToS/no-PII guardrails). Prefer it over a generic scraper recommendation when the goal is completeness.
+- **`data-search-to-saturation`** — when the project's *own deliverable* is exhaustive discovery: find and map **all** the X (sources, competitors, tools, platforms, datasets) for a domain and keep that list current (yield-tracked source registry + delta re-runs). Note: this scout already runs the method internally as Phase 1.5 — recommend the *skill* only when discovery is part of what the user is **building**, not for the scout's own search.
+
+Only recommend a skill when the pattern genuinely fits — don't force it.
 
 ---
 
